@@ -1,9 +1,8 @@
 <template>
   <view class="profile-container">
-    <!-- 用户信息 -->
     <view class="user-header">
       <view class="user-info" v-if="userState.isLoggedIn">
-        <image class="avatar" :src="userState.avatarUrl || '/static/default-avatar.png'" mode="aspectFill" />
+        <image class="avatar" :src="userState.avatarUrl || '/static/logo.png'" mode="aspectFill" />
         <view class="info">
           <text class="nickname">{{ userState.nickname || '用户' }}</text>
           <text class="credits">剩余次数: {{ userState.credits }}</text>
@@ -14,21 +13,20 @@
       </view>
     </view>
 
-    <!-- 功能列表 -->
     <view class="menu-list">
-      <view class="menu-item" @tap="goToHistory">
+      <view class="menu-item" @tap="goTo('/pages/profile/history')">
         <text class="menu-icon">💬</text>
         <text class="menu-title">历史对话</text>
         <text class="menu-arrow">></text>
       </view>
 
-      <view class="menu-item" @tap="goToReports">
+      <view class="menu-item" @tap="goTo('/pages/report/index', true)">
         <text class="menu-icon">📊</text>
         <text class="menu-title">我的报告</text>
         <text class="menu-arrow">></text>
       </view>
 
-      <view class="menu-item" @tap="goToArchives">
+      <view class="menu-item" @tap="goTo('/pages/profile/archive')">
         <text class="menu-icon">📝</text>
         <text class="menu-title">预填档案</text>
         <text class="menu-arrow">></text>
@@ -37,12 +35,6 @@
       <view v-if="isAdvisor()" class="menu-item" @tap="goToAdvisor">
         <text class="menu-icon">👨‍💼</text>
         <text class="menu-title">顾问工作台</text>
-        <text class="menu-arrow">></text>
-      </view>
-
-      <view class="menu-item" @tap="goToSettings">
-        <text class="menu-icon">⚙️</text>
-        <text class="menu-title">设置</text>
         <text class="menu-arrow">></text>
       </view>
     </view>
@@ -68,27 +60,16 @@ const handleLogin = async () => {
   }
 }
 
-const goToHistory = () => {
-  // TODO: 跳转到历史对话页面
-  uni.showToast({ title: '功能开发中', icon: 'none' })
-}
-
-const goToReports = () => {
-  uni.switchTab({ url: '/pages/report/index' })
-}
-
-const goToArchives = () => {
-  // TODO: 跳转到预填档案页面
-  uni.showToast({ title: '功能开发中', icon: 'none' })
+const goTo = (url: string, isTab = false) => {
+  if (isTab) {
+    uni.switchTab({ url })
+  } else {
+    uni.navigateTo({ url })
+  }
 }
 
 const goToAdvisor = () => {
-  // TODO: 跳转到顾问工作台
-  uni.showToast({ title: '功能开发中', icon: 'none' })
-}
-
-const goToSettings = () => {
-  // TODO: 跳转到设置页面
+  // Phase 4 实现
   uni.showToast({ title: '功能开发中', icon: 'none' })
 }
 </script>
@@ -148,10 +129,9 @@ const goToSettings = () => {
 }
 
 .menu-list {
-  margin-top: 20rpx;
+  margin: 20rpx 24rpx;
   background: #fff;
   border-radius: 16rpx;
-  margin: 20rpx 24rpx;
   overflow: hidden;
 }
 

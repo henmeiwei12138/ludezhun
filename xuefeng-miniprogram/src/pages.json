@@ -19,6 +19,12 @@
       }
     },
     {
+      "path": "pages/school/detail",
+      "style": {
+        "navigationBarTitleText": "院校详情"
+      }
+    },
+    {
       "path": "pages/report/index",
       "style": {
         "navigationBarTitleText": "志愿报告"
@@ -28,6 +34,18 @@
       "path": "pages/profile/index",
       "style": {
         "navigationBarTitleText": "个人中心"
+      }
+    },
+    {
+      "path": "pages/profile/history",
+      "style": {
+        "navigationBarTitleText": "历史对话"
+      }
+    },
+    {
+      "path": "pages/profile/archive",
+      "style": {
+        "navigationBarTitleText": "预填档案"
       }
     }
   ],

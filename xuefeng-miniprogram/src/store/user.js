@@ -15,7 +15,8 @@ export const userState = reactive({
   credits: 3,
   plan: 'free',
   role: 'user',
-  isLoggedIn: !!getStoredOpenid()
+  isLoggedIn: !!getStoredOpenid(),
+  archive: null
 })
 
 /**
@@ -32,6 +33,7 @@ export async function initUser() {
       userState.credits = userInfo.credits || 3
       userState.plan = userInfo.plan || 'free'
       userState.role = userInfo.role || 'user'
+      userState.archive = userInfo.archive || null
     }
   } catch (err) {
     console.error('初始化用户信息失败:', err)

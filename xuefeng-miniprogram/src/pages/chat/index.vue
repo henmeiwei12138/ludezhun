@@ -1,41 +1,21 @@
 <template>
   <view class="chat-container">
-    <!-- 槽位进度 -->
-    <view class="slot-progress">
-      <view class="progress-bar">
-        <view class="progress-fill" :style="{ width: (slotCount / 7 * 100) + '%' }"></view>
-      </view>
-      <text class="progress-text">{{ slotCount }}/7 已填</text>
-    </view>
+    <SlotProgress :slots="slotsState.slots" />
 
-    <!-- 消息列表 -->
     <scroll-view class="message-list" scroll-y :scroll-into-view="scrollToId">
-      <view v-for="(msg, index) in messages" :key="index" :id="'msg-' + index"
-        :class="['message-item', msg.role === 'user' ? 'user-message' : 'ai-message']">
-        <view class="message-bubble">
-          <text>{{ msg.content }}</text>
-        </view>
-      </view>
-      <view v-if="isLoading" class="message-item ai-message">
-        <view class="message-bubble loading">
-          <text>正在思考...</text>
-          <view class="loading-dots">
-            <view class="dot"></view>
-            <view class="dot"></view>
-            <view class="dot"></view>
-          </view>
-        </view>
-      </view>
+      <ChatBubble v-for="(msg, index) in messages" :key="index"
+        :id="'msg-' + index"
+        :type="msg.role === 'user' ? 'user' : 'ai'"
+        :content="msg.content" />
+      <ChatBubble v-if="isLoading" type="ai" :loading="true" />
     </scroll-view>
 
-    <!-- 快捷标签 -->
     <view class="quick-tags">
       <view class="tag" @tap="sendQuickMessage('冲一冲')">冲一冲</view>
       <view class="tag" @tap="sendQuickMessage('稳妥')">稳妥</view>
       <view class="tag" @tap="sendQuickMessage('就业优先')">就业优先</view>
     </view>
 
-    <!-- 输入框 -->
     <view class="input-area">
       <input class="input-box" v-model="inputText" placeholder="描述你的情况..."
         @confirm="sendMessage" confirm-type="send" />
@@ -44,7 +24,6 @@
       </view>
     </view>
 
-    <!-- 生成报告按钮 -->
     <view v-if="canGenerateReport" class="generate-report-btn" @tap="goToReport">
       <text>资料收集完整，立即生成报告</text>
     </view>
@@ -53,8 +32,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick } from 'vue'
+import ChatBubble from '@/components/ChatBubble/index.vue'
+import SlotProgress from '@/components/SlotProgress/index.vue'
 import { XuefengAgent } from '@/agent/XuefengAgent'
-import { slotCount, canGenerateReport, syncSlotsFromAgent } from '@/store/slots'
+import { slotsState, slotCount, canGenerateReport, syncSlotsFromAgent } from '@/store/slots'
 import { userState } from '@/store/user'
 import { createSession, updateSession } from '@/api/cloud'
 
@@ -65,12 +46,49 @@ const isLoading = ref(false)
 const scrollToId = ref('')
 const sessionId = ref('')
 
+// 防抖更新会话
+let updateTimer: ReturnType<typeof setTimeout> | null = null
+function debouncedUpdate(data: any) {
+  if (updateTimer) clearTimeout(updateTimer)
+  updateTimer = setTimeout(async () => {
+    if (!sessionId.value) return
+    try {
+      await updateSession(sessionId.value, data)
+    } catch (err) {
+      console.error('更新会话失败:', err)
+    }
+  }, 500)
+}
+
 onMounted(async () => {
-  // 初始化 Agent
   agent.value = new XuefengAgent()
 
-  // 创建会话
+  // 恢复历史会话
   if (userState.openid) {
+    try {
+      const { getUserSessions } = await import('@/api/cloud')
+      const result = await getUserSessions(userState.openid)
+      if (result.data && result.data.length > 0) {
+        const lastSession = result.data[0]
+        if (lastSession.status === 'active') {
+          sessionId.value = lastSession._id
+          messages.value = lastSession.messages || []
+          if (lastSession.slots) {
+            agent.value.restoreState({ slots: lastSession.slots, history: [] })
+            syncSlotsFromAgent(lastSession.slots)
+          }
+          if (messages.value.length > 0) {
+            await nextTick()
+            scrollToId.value = 'msg-' + (messages.value.length - 1)
+          }
+          return
+        }
+      }
+    } catch (err) {
+      console.error('恢复会话失败:', err)
+    }
+
+    // 创建新会话
     try {
       const result = await createSession({
         userId: userState.openid,
@@ -84,7 +102,6 @@ onMounted(async () => {
     }
   }
 
-  // 欢迎消息
   messages.value.push({
     role: 'assistant',
     content: '你好！我是雪峰志愿顾问。说说你的情况吧，哪个省的？考了多少分？想学什么方向？'
@@ -97,39 +114,38 @@ const sendMessage = async () => {
   const userMsg = inputText.value.trim()
   inputText.value = ''
 
-  // 添加用户消息
   messages.value.push({ role: 'user', content: userMsg })
-
-  // 滚动到底部
   await nextTick()
   scrollToId.value = 'msg-' + (messages.value.length - 1)
 
-  // 发送给 Agent
   isLoading.value = true
   try {
-    const result = await agent.value.chat(userMsg)
+    const result = await agent.value.chat(userMsg, (partial: string) => {
+      // 伪流式回调：实时更新最后一条 AI 消息
+      const lastMsg = messages.value[messages.value.length - 1] as any
+      if (lastMsg && lastMsg.role === 'assistant' && lastMsg._streaming) {
+        lastMsg.content = partial
+      } else {
+        messages.value.push({ role: 'assistant', content: partial, _streaming: true } as any)
+      }
+      nextTick(() => {
+        scrollToId.value = 'msg-' + (messages.value.length - 1)
+      })
+    })
 
-    // 添加 AI 回复
-    messages.value.push({ role: 'assistant', content: result.reply })
+    // 确保最终内容完整
+    const lastMsg = messages.value[messages.value.length - 1]
+    if (lastMsg && lastMsg.role === 'assistant') {
+      lastMsg.content = result.reply
+      delete (lastMsg as any)._streaming
+    }
 
-    // 同步槽位状态
     syncSlotsFromAgent(result.slots)
 
-    // 滚动到底部
-    await nextTick()
-    scrollToId.value = 'msg-' + (messages.value.length - 1)
-
-    // 更新会话
-    if (sessionId.value) {
-      try {
-        await updateSession(sessionId.value, {
-          slots: result.slots,
-          messages: messages.value
-        })
-      } catch (err) {
-        console.error('更新会话失败:', err)
-      }
-    }
+    debouncedUpdate({
+      slots: result.slots,
+      messages: messages.value.map(m => ({ role: m.role, content: m.content }))
+    })
   } catch (err) {
     console.error('发送失败:', err)
     messages.value.push({
@@ -147,7 +163,7 @@ const sendQuickMessage = (msg: string) => {
 }
 
 const goToReport = () => {
-  uni.navigateTo({ url: '/pages/report/index' })
+  uni.navigateTo({ url: '/pages/report/index?generate=1' })
 }
 </script>
 
@@ -159,106 +175,21 @@ const goToReport = () => {
   background-color: #f5f5f5;
 }
 
-.slot-progress {
-  padding: 16rpx 24rpx;
-  background: #fff;
-  display: flex;
-  align-items: center;
-}
-
-.progress-bar {
-  flex: 1;
-  height: 12rpx;
-  background: #e0e0e0;
-  border-radius: 6rpx;
-  margin-right: 16rpx;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #667eea, #764ba2);
-  border-radius: 6rpx;
-  transition: width 0.3s;
-}
-
-.progress-text {
-  font-size: 24rpx;
-  color: #666;
-}
-
 .message-list {
   flex: 1;
   padding: 20rpx;
 }
 
-.message-item {
-  margin-bottom: 20rpx;
-  display: flex;
-}
-
-.user-message {
-  justify-content: flex-end;
-}
-
-.ai-message {
-  justify-content: flex-start;
-}
-
-.message-bubble {
-  max-width: 70%;
-  padding: 20rpx 24rpx;
-  border-radius: 16rpx;
-  font-size: 28rpx;
-  line-height: 1.5;
-}
-
-.user-message .message-bubble {
-  background: #667eea;
-  color: #fff;
-}
-
-.ai-message .message-bubble {
-  background: #fff;
-  color: #333;
-}
-
-.loading {
-  display: flex;
-  align-items: center;
-}
-
-.loading-dots {
-  display: flex;
-  margin-left: 12rpx;
-}
-
-.dot {
-  width: 8rpx;
-  height: 8rpx;
-  background: #666;
-  border-radius: 50%;
-  margin: 0 4rpx;
-  animation: dotPulse 1.4s infinite ease-in-out both;
-}
-
-.dot:nth-child(1) { animation-delay: -0.32s; }
-.dot:nth-child(2) { animation-delay: -0.16s; }
-
-@keyframes dotPulse {
-  0%, 80%, 100% { transform: scale(0); }
-  40% { transform: scale(1); }
-}
-
 .quick-tags {
   display: flex;
-  padding: 16rpx 24rpx;
+  padding: 12rpx 24rpx;
   gap: 16rpx;
   background: #fff;
-  border-top: 1rpx solid #eee;
+  border-top: 1rpx solid #f0f0f0;
 }
 
 .tag {
-  padding: 12rpx 24rpx;
+  padding: 10rpx 24rpx;
   background: #f0f0f0;
   border-radius: 24rpx;
   font-size: 24rpx;
@@ -269,7 +200,7 @@ const goToReport = () => {
   display: flex;
   padding: 16rpx 24rpx;
   background: #fff;
-  border-top: 1rpx solid #eee;
+  border-top: 1rpx solid #f0f0f0;
 }
 
 .input-box {

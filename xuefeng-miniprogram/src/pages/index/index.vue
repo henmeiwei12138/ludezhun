@@ -43,8 +43,16 @@
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import { onShareAppMessage } from '@dcloudio/uni-app'
 import { userState, login, initUser } from '@/store/user'
 import { initCloud } from '@/api/cloud'
+
+onShareAppMessage(() => {
+  return {
+    title: '雪峰志愿 - AI 高考志愿顾问',
+    path: '/pages/index/index'
+  }
+})
 
 onMounted(() => {
   initCloud()
