@@ -68,7 +68,6 @@
 import { ref, onMounted } from 'vue'
 import { onShareAppMessage } from '@dcloudio/uni-app'
 import { userState, login, initUser } from '@/store/user'
-import { initCloud } from '@/api/cloud'
 import AdBanner from '@/components/AdBanner/index.vue'
 
 onShareAppMessage(() => {
@@ -81,7 +80,6 @@ onShareAppMessage(() => {
 const showPrivacyPopup = ref(false)
 
 onMounted(() => {
-  initCloud()
   if (userState.isLoggedIn) {
     initUser()
   }

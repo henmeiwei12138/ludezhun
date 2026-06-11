@@ -52,12 +52,27 @@ export function wxLogin() {
 }
 
 /**
- * 数据库操作封装
+ * 数据库操作封装（延迟初始化，必须在 initCloud() 之后使用）
  */
-const db = wx.cloud.database()
-const _ = db.command
+let _db = null
+let _cmd = null
 
-export { db, _ }
+function getDb() {
+  if (!_db) {
+    _db = wx.cloud.database()
+    _cmd = _db.command
+  }
+  return _db
+}
+
+function getCmd() {
+  if (!_cmd) getDb()
+  return _cmd
+}
+
+// 导出 getter 函数，替代直接导出 db/_
+export const db = { collection: (...a) => getDb().collection(...a), serverDate: () => getDb().serverDate() }
+export const _ = { gt: (...a) => getCmd().gt(...a), inc: (...a) => getCmd().inc(...a) }
 
 /**
  * 获取用户信息
