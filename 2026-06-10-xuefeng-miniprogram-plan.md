@@ -1,20 +1,19 @@
-# 雪峰志愿填报小程序 Implementation Plan
+# 志愿助手小程序 Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
-**Goal:** 基于雪峰 agent 的 AI 高考志愿顾问微信小程序，C端+B端双模式，Freemium 付费。
+**Goal:** AI 高考志愿顾问微信小程序，免费使用 + 广告变现，个人开发者友好。
 
 **Architecture:**
 - 前端：Uniapp（Vue3）编写微信小程序，直接调用 LLM API（DeepSeek 等 OpenAI 兼容接口），Agent 槽位逻辑以 JS 实现
 - 后端：微信云开发 CloudBase（云数据库 + 云存储 + 云函数），零运维
-- AI：前端 JS 版 Agent，复刻 agent.py 的槽位管理 + 提示词逻辑，SSE 流式输出
+- AI：前端 JS 版 Agent，复刻 agent.py 的槽位管理 + 提示词逻辑
+- 变现：微信流量主广告（Banner / 激励视频 / 插屏广告），无需企业资质
 
 **Tech Stack:**
 - Uniapp (Vue3 + Vite) / 微信原生小程序 API
 - 微信云开发 CloudBase（MongoDB-like 云数据库）
-- LLM：DeepSeek API / 通义千问（OpenAI 兼容，前端 HTTPS 直调）
-- 报告 PDF：前端 canvas 截图 or 调用云函数生成
-- 支付：微信小程序内支付 API
+- LLM：DeepSeek API / 通义千问（OpenAI 兼容，云函数代理）
+- 广告：微信小程序流量主（Banner 广告组件 + 激励视频广告组件）
+- 报告分享：前端 canvas 截图生成分享图
 
 ---
 
@@ -28,13 +27,13 @@ xuefeng-miniprogram/
 │   │   ├── chat/           # AI 对话主页
 │   │   ├── report/         # 志愿报告
 │   │   ├── school/         # 院校查询
-│   │   ├── profile/        # 个人档案
-│   │   └── advisor/        # 顾问工作台 (B端)
+│   │   └── profile/        # 个人档案
 │   ├── components/
 │   │   ├── ChatBubble/     # 对话气泡组件
 │   │   ├── SlotProgress/   # 槽位进度条
 │   │   ├── SchoolCard/     # 院校卡片
-│   │   └── ReportCard/     # 报告卡片
+│   │   ├── ReportCard/     # 报告卡片
+│   │   └── AdBanner/       # 广告组件封装
 │   ├── store/
 │   │   ├── chat.js         # 对话状态 (Pinia)
 │   │   ├── user.js         # 用户状态
@@ -45,532 +44,268 @@ xuefeng-miniprogram/
 │   │   ├── knowledge.js    # 知识库检索
 │   │   └── prompts.js      # system_prompt 移植
 │   ├── api/
-│   │   ├── llm.js          # LLM 流式调用封装
+│   │   ├── llm.js          # LLM 调用封装
 │   │   └── cloud.js        # CloudBase 数据操作
 │   └── utils/
-│       ├── auth.js         # 微信登录 + JWT/session
-│       └── pay.js          # 微信支付
+│       ├── auth.js         # 微信登录 + session
+│       └── ad.js           # 广告相关工具函数
 ├── cloudfunctions/
-│   ├── wx-login/           # 微信登录云函数（安全换取openid）
-│   ├── report-generate/    # 报告生成云函数（Node.js）
-│   └── pay-notify/         # 支付回调云函数
+│   ├── wx-login/           # 微信登录云函数
+│   ├── llm-proxy/          # LLM 代理云函数（保护 API Key）
+│   └── report-generate/    # 报告生成云函数
 ├── docs/
 └── package.json
 ```
 
 ---
 
-## 核心技术决策
+## 第三阶段 — 广告变现（约1.5周）
 
-### Agent JS 化方案
+**目标**：接入微信流量主广告，以「报告解锁」为唯一变现点，商业化闭环。
 
-```
-agent.py 改造规则：
-Python print()      → await stream callback
-Python input()      → 消息队列中取
-slots dict          → Pinia store (slots.js)
-知识库检索           → 本地 JSON 文件检索
-百度搜索            → 云函数代理（避免前端暴露 key）
-LLM 调用            → llm.js SSE 流式请求
-```
+### 核心商业模式（方案B）
 
-### LLM 调用架构（关键）
+| 功能 | 规则 |
+|------|------|
+| AI 对话（7个槽位收集） | ✅ **完全免费，无限次** |
+| 生成志愿报告 | ✅ 免费 |
+| **查看完整报告** | 📺 **需观看30s激励视频广告** |
+| 修改信息重新生成 | 📺 每次看广告解锁 |
+| 底部 Banner 广告 | 🪧 各页面展示，增加曝光收益 |
 
-```
-小程序 → HTTPS → DeepSeek API（直连）
-                         ↓
-              SSE 流式 text/event-stream
-                         ↓
-              onChunkReceived → 气泡追加文字
-```
+> **一句话**：聊天不要钱，看结果看个广告。
 
-**注意**：API Key 安全问题 → 通过云函数代理转发，或使用 CloudBase 调用（推荐后者，Key 不出现在前端代码）
+### 前置条件
 
-### CloudBase 数据结构
+个人小程序开通流量主条件：
+- 累计独立访客 UV ≥ 1000
+- 在微信公众平台 → 流量主 → 申请开通
+- 创建广告位，获取广告位 ID（adUnitId）
 
-```javascript
-// users 集合
-{ _id, openid, nickname, avatarUrl, credits: 3, plan: "free", createdAt }
-
-// sessions 集合
-{ _id, userId, status: "active|done", slots: {...}, messages: [...], createdAt }
-
-// reports 集合
-{ _id, sessionId, userId, content: {...}, isPaid: false, createdAt }
-
-// orders 集合
-{ _id, userId, amount, status, wxOrderId, productType, createdAt }
-
-// schools 集合（从 knowledge_base.md 导入）
-{ _id, name, province, type, rank985: bool, enrollment: [...] }
-```
+> **初期过渡方案**：在 UV 未达到 1000 之前，先用激励视频逻辑占位（调用 API 后模拟成功），等达到条件后一键切换真实广告 ID。
 
 ---
 
-## 第一阶段 — 地基（约1周）
-
-**目标**：项目跑通、微信登录成功、CloudBase 通、本地可以 chat 通
-
-### Task 1-1: 项目初始化
+### Task 3-1: 激励视频广告 — 替代付费墙
 
 **涉及文件**：
-- 创建：`xuefeng-miniprogram/` 根目录
-- 创建：`package.json`, `vite.config.js`, `manifest.json`
+- 创建：`src/utils/ad.js`
+- 创建：`src/components/AdRewardModal/index.vue`
+- 修改：`src/pages/report/index.vue`
 
-**步骤**：
-1. 安装 HBuilderX 或 Vite Uniapp 脚手架
-   ```bash
-   npx degit dcloudio/uni-preset-vue#vite-ts xuefeng-miniprogram
-   cd xuefeng-miniprogram && npm install
-   ```
-2. 微信开发者工具绑定 AppID，开启云开发
-3. 配置 `manifest.json`：小程序 AppID，云环境 ID
-4. 验收：HBuilderX 可真机预览首页
-
-### Task 1-2: CloudBase 环境配置
-
-**涉及文件**：
-- 创建：`cloudfunctions/wx-login/index.js`
-- 创建：`src/api/cloud.js`
-
-**步骤**：
-1. 进入微信云开发控制台，创建集合：`users`, `sessions`, `reports`, `orders`, `schools`
-2. 设置集合权限：`users` 仅创建者读写，其余服务端读写
-3. 编写 `wx-login` 云函数：
-   ```javascript
-   // cloudfunctions/wx-login/index.js
-   exports.main = async (event) => {
-     const { OPENID } = cloud.getWXContext()
-     // 查找或创建用户
-     const db = cloud.database()
-     let user = await db.collection('users').where({ openid: OPENID }).get()
-     if (user.data.length === 0) {
-       await db.collection('users').add({ openid: OPENID, credits: 3, plan: 'free', createdAt: new Date() })
-     }
-     return { openid: OPENID }
-   }
-   ```
-4. 部署云函数
-5. 验收：调用云函数成功返回 openid
-
-### Task 1-3: 微信登录与用户状态
-
-**涉及文件**：
-- 创建：`src/utils/auth.js`
-- 创建：`src/store/user.js`
-- 修改：`src/pages/index/index.vue`
-
-**步骤**：
-1. `auth.js` 封装登录流程：`wx.login` → 调用 `wx-login` 云函数 → 存储 openid 到 storage
-2. `user.js` Pinia store：`{ openid, nickname, credits, plan, isLoggedIn }`
-3. 首页自动触发登录，获取用户信息（`wx.getUserProfile`）
-4. 验收：首页显示用户头像 + "剩余次数：3"
-
-### Task 1-4: LLM 调用封装（云函数代理）
-
-**涉及文件**：
-- 创建：`cloudfunctions/llm-proxy/index.js`
-- 创建：`src/api/llm.js`
-
-**背景**：前端不暴露 LLM API Key，通过云函数安全代理
-
-**步骤**：
-1. 编写 `llm-proxy` 云函数，转发请求到 DeepSeek：
-   ```javascript
-   // cloudfunctions/llm-proxy/index.js
-   const https = require('https')
-   exports.main = async (event) => {
-     const { messages, stream = false } = event
-     // 使用 CloudBase 环境变量存储 API_KEY
-     const apiKey = process.env.DEEPSEEK_API_KEY
-     // 调用 DeepSeek /chat/completions
-     // 注意：CloudBase 云函数不支持真正的 SSE，用非流式 or 分批返回
-     const response = await fetch('https://api.deepseek.com/chat/completions', {
-       method: 'POST',
-       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-       body: JSON.stringify({ model: 'deepseek-chat', messages, stream: false })
-     })
-     return await response.json()
-   }
-   ```
-2. 在云开发控制台配置环境变量 `DEEPSEEK_API_KEY`
-3. `src/api/llm.js` 封装调用方法：`callLLM(messages) → Promise<string>`
-4. 验收：在测试页面发送一条消息，成功收到 LLM 回复
-
-> **流式说明**：CloudBase 云函数不支持 SSE 流式返回。解决方案：
-> - 方案A（简单）：非流式，等待完整响应后一次性展示
-> - 方案B（更好体验）：将完整响应切割，前端用 `setInterval` 逐字渲染（伪流式）
-> - 方案C（进阶）：使用 HTTPS 直连 + 小程序 request `enableChunked` 实验性 API
-
-### Task 1-5: Agent 核心 JS 移植
-
-**涉及文件**：
-- 创建：`src/agent/prompts.js`（system_prompt.md 的 JS 版）
-- 创建：`src/agent/SlotManager.js`
-- 创建：`src/agent/XuefengAgent.js`
-- 创建：`src/store/slots.js`
-
-**步骤**：
-1. `prompts.js`：将 `system_prompt.md` 转为 JS 字符串模板，支持槽位动态插入
-2. `SlotManager.js`：
-   ```javascript
-   // 7个槽位
-   const SLOTS = {
-     province: null,    // 省份
-     score: null,       // 分数/位次
-     subject: null,     // 选科
-     interest: null,    // 兴趣/厌恶
-     location: null,    // 地域偏好
-     family: null,      // 家庭资源
-     goal: null         // 核心诉求
-   }
-   // 从消息文本提取槽位的正则/关键词逻辑
-   export function extractSlots(text, currentSlots) { ... }
-   export function getSlotsCompletion(slots) { ... }  // 返回 0-7
-   ```
-3. `XuefengAgent.js`：
-   ```javascript
-   export class XuefengAgent {
-     constructor(sessionId) {
-       this.sessionId = sessionId
-       this.slots = { ...SLOTS }
-       this.history = []
-     }
-     async chat(userMessage) {
-       this.slots = extractSlots(userMessage, this.slots)
-       const prompt = buildPrompt(this.slots, this.history)
-       const reply = await callLLM([...this.history, { role: 'user', content: userMessage }])
-       this.history.push({ role: 'user', content: userMessage }, { role: 'assistant', content: reply })
-       return { reply, slots: this.slots, slotCount: getSlotsCompletion(this.slots) }
-     }
-   }
-   ```
-4. 验收：在测试页面和 Agent 对话，槽位进度正确递增
-
-### Task 1-6: Tab 导航和页面骨架
-
-**涉及文件**：
-- 修改：`src/pages.json`
-- 创建：各页面 index.vue 骨架
-
-**步骤**：
-1. 配置底部 TabBar：对话 / 院校 / 报告 / 我的
-2. 创建 4 个页面的空骨架（仅 title + 占位文字）
-3. 验收：小程序可以在 4 个 Tab 间切换
-
----
-
-## 第二阶段 — MVP（约2周）
-
-**目标**：对话界面完整可用，生成基础报告，历史记录可查，可真实用户内测
-
-### Task 2-1: 对话页面 UI
-
-**涉及文件**：
-- 修改：`src/pages/chat/index.vue`
-- 创建：`src/components/ChatBubble/index.vue`
-- 创建：`src/components/SlotProgress/index.vue`
-
-**设计要点**：
+**设计**
 ```
 ┌─────────────────────────────┐
-│  槽位进度 [●●●○○○○] 3/7 已填 │  ← SlotProgress 组件
-├─────────────────────────────┤
-│                             │
-│  [AI] 您好！我是雪峰顾问...  │  ← ChatBubble (ai)
-│  [用户] 我是河北的，650分   │  ← ChatBubble (user)
-│  [AI] 好的，您的分数很不错  │
-│  [AI 正在思考...] ●●●       │  ← 加载动画
-│                             │
-├─────────────────────────────┤
-│ [冲一冲] [稳妥] [就业优先]  │  ← 快捷标签
-│ ┌─────────────────┐[发送]  │  ← 输入框
-│ │                 │       │
-│ └─────────────────┘       │
+│       报告预览区域            │
+│  (付费墙 → 看广告解锁)       │
+│                              │
+│  ┌─────────────────────┐    │
+│  │ 📺 看广告解锁完整报告  │    │
+│  │  观看30s广告即可      │    │
+│  └─────────────────────┘    │
+│  [跳过] 暂不需要            │
 └─────────────────────────────┘
 ```
 
 **步骤**：
-1. `ChatBubble` 组件：props `type`(ai/user), `content`, `loading`
-2. `SlotProgress` 组件：props `slots` 对象，计算完成数，7格进度条
-3. 对话页面：滚动视图 + 消息列表渲染
-4. 发送逻辑：调用 `XuefengAgent.chat()` → 收到响应 → 追加气泡 → 更新进度条
-5. 7槽位满时：底部弹出「✨ 资料收集完整，立即生成报告」按钮
-6. 验收：完整走通一次对话，进度条变化正确
+1. 创建 `src/utils/ad.js`，封装激励视频广告 API：
+   ```javascript
+   // src/utils/ad.js
+   const REWARD_VIDEO_UNIT_ID = 'xxxxx' // 流量主后台获取
 
-### Task 2-2: 会话云端持久化
+   export function showRewardVideo() {
+     return new Promise((resolve, reject) => {
+       const ad = wx.createRewardedVideoAd({ adUnitId: REWARD_VIDEO_UNIT_ID })
+       
+       ad.onLoad(() => console.log('激励视频加载成功'))
+       ad.onError(err => reject(err))
+       ad.onClose(res => {
+         if (res && res.isEnded) {
+           resolve(true) // 用户完整观看，发放奖励
+         } else {
+           resolve(false) // 未完整观看，不给奖励
+         }
+       })
+       
+       ad.show().catch(err => {
+         // 广告加载失败时重新加载
+         ad.load().then(() => ad.show()).catch(reject)
+       })
+     })
+   }
+   ```
+2. 删除 `src/utils/pay.js`（支付相关代码不再需要）
+3. 修改报告页付费墙：模糊遮罩 + 「看广告解锁」按钮
+4. 用户点击「看广告解锁」→ 播放激励视频 → 完整观看后解锁报告
+5. 验收：报告页遮罩可正常通过看广告解锁
+
+### Task 3-2: Banner 广告位
 
 **涉及文件**：
-- 修改：`src/store/chat.js`
-- 修改：`src/api/cloud.js`
+- 创建：`src/components/AdBanner/index.vue`
+- 修改：各页面布局，添加 Banner 位
+
+**广告位规划**：
+
+| 页面 | 位置 | 广告类型 | 说明 |
+|------|------|---------|------|
+| 首页 | 底部 tips 卡片上方 | Banner | 480×60 或 480×75 |
+| 对话页 | 输入框下方 | Banner | 不影响对话，沉底 |
+| 院校页 | 搜索结果底部 | Banner | 列表结束后展示 |
+| 报告页 | 报告内容底部 | Banner | 解锁后展示 |
 
 **步骤**：
-1. 每次对话开始，在 `sessions` 集合创建记录
-2. 每次发送/收到消息后，更新 `sessions.messages` 和 `sessions.slots`
-3. 使用防抖（500ms）批量更新，避免频繁写库
-4. 验收：关闭小程序重新打开，历史对话可恢复
+1. 创建 `AdBanner` 组件：
+   ```javascript
+   // Banner广告组件
+   <ad unit-id="{{adUnitId}}" ad-intervals="60" bindload="onLoad" binderror="onError"></ad>
+   ```
+2. 将 `AdBanner` 组件嵌入各页面底部
+3. 设置广告刷新间隔（建议 60 秒以上，避免影响体验）
+4. 验收：各页面底部显示广告
 
-### Task 2-3: 报告生成
+### Task 3-3: 插屏广告（在适当时机展示）
 
-**涉及文件**：
-- 创建：`cloudfunctions/report-generate/index.js`
-- 创建：`src/pages/report/index.vue`
-- 创建：`src/components/ReportCard/index.vue`
+**说明**：插屏广告在小程序页面切换时自动弹出，收益较高但影响用户体验，建议低频使用。
 
-**报告生成逻辑**：
+**展示时机**：
+- 对话完成并生成报告后（return 到报告页时）
+- 院校查询切换 Tab 时（仅首次）
+- 注意：不要在用户刚进入或高频操作时弹出，会被流量主判定违规
+
+**步骤**：
+1. 在 `app.js` 中预加载插屏广告
+2. 在 `pages/chat/index.js` 的「生成报告」成功回调中触发
+3. 设置频次控制：同一用户每天最多弹 1 次
+
+---
+
+## 第四阶段 — 增长 & 运营（约2周）
+
+**目标**：用户增长裂变、广告收益优化、内容持续运营。
+
+### Task 4-1: 分享裂变机制
+
+**核心逻辑**：奖励「免广告解锁券」，代替已废弃的 credits。
+
+| 角色 | 奖励 | 价值 |
+|------|------|------|
+| **被邀请者**（新用户） | 🎁 **首次生成报告直接解锁**（跳过30s广告） | 省时间 |
+| **邀请者**（老用户） | 🎁 获得 **1次「免广告券」**（下次看报告不播广告） | 省时间 |
+
+**数据存储**（CloudBase `users` 集合新增字段）：
 ```javascript
-// cloudfunctions/report-generate/index.js
-// 1. 接收 slots 数据
-// 2. 构建报告专用 prompt（从 system_prompt.md 冲稳保部分）
-// 3. 调用 LLM 生成结构化 JSON 报告
-// 4. 解析并存储到 reports 集合
-// 返回结构:
 {
-  profile: "学生画像摘要",
-  chong: [{ school, major, reason, risk }],      // 冲：5所
-  wen: [{ school, major, reason }],               // 稳：5所
-  bao: [{ school, major, reason }],               // 保：3所
-  analysis: "专业就业分析",
-  warning: "风险提示"
+  freeUnlocks: 0,      // 免广告解锁券数量
+  invitedBy: "xxx",     // 邀请者的 openid
+  inviteCount: 0        // 成功邀请人数
 }
 ```
 
-**付费墙规则**（在前端实现）：
-- 免费可见：profile + chong前2所
-- 付费可见：完整报告
+**涉及文件**：
+- 修改：`src/pages/chat/index.vue`（分享按钮）
+- 修改：`src/pages/report/index.vue`（解锁逻辑改为检查免广告券）
+- 创建：`src/pages/invite/index.vue`（邀请页面，展示已获得免广告券数）
 
 **步骤**：
-1. 「生成报告」按钮触发 → 调用 `report-generate` 云函数
-2. 等待时显示生成动画（进度条 + tips）
-3. 报告页面渲染：卡片式展示，付费区域虚化 + 解锁按钮
-4. 验收：完整对话后生成报告，付费墙前内容正常展示
+1. **分享入口**：对话页面和报告页增加「分享给同学」按钮
+   - 分享标题：「我在用志愿助手选志愿，你也来试试」
+   - 分享路径：`/pages/index/index?inviter={openid}`
+2. **邀请处理**：新用户打开时读取 `inviter` 参数 → 存入用户表 `invitedBy` 字段
+3. **报告解锁逻辑变更**：
+   ```
+   用户点击解锁 → 检查是否有免广告券？
+   ├─ 有券 → 消耗1张 → 🎉 直接解锁
+   ├─ 被邀请且首次 → 🎉 直接解锁（记录已使用）
+   └─ 无券 → 📺 播放激励视频广告
+   ```
+4. **发放奖励**：被邀请者首次完成对话生成报告后 → 云函数给双方各加1张券
+5. **验收**：分享后可正常打开小程序，奖励正确发放
+4. 验收：分享后可正常打开小程序
 
-### Task 2-4: 院校查询页面
+### Task 4-2: 广告收益优化
 
 **涉及文件**：
-- 修改：`src/pages/school/index.vue`
-- 创建：`src/components/SchoolCard/index.vue`
-- 创建：`cloudfunctions/import-schools/index.js`（数据导入工具，一次性使用）
+- 修改：流量主后台配置
+- 修改：`src/utils/ad.js`
+
+**优化策略**：
+1. **A/B 测试广告位置**：Banner 放底部 vs 放中部，哪个点击率更高
+2. **激励视频填充率优化**：预加载广告，避免用户等待时关闭
+   ```javascript
+   // 预加载：App onLaunch 时提前加载下一个激励视频
+   let nextAd = null
+   function preloadAd() {
+     nextAd = wx.createRewardedVideoAd({ adUnitId: REWARD_VIDEO_UNIT_ID })
+     nextAd.load()
+   }
+   ```
+3. **广告频次控制**：同一用户每天看激励视频上限 5 次
+4. **广告展示埋点**：统计各广告位的曝光量、点击量、eCPM
+
+### Task 4-3: 用户留存功能
 
 **步骤**：
-1. 将 `knowledge_base.md` 中的院校数据结构化，导入 CloudBase `schools` 集合
-2. 搜索页：输入框 + 筛选标签（省份/985/211/专业类）
-3. 调用 CloudBase 数据库模糊查询：`db.collection('schools').where({ name: /搜索词/ })`
-4. 院校详情：基本信息 + 近3年录取分数线（折线图，使用 uCharts）
-5. 验收：搜索"北大"出现结果，点击查看详情
+1. **订阅消息**：生成报告后，引导用户授权订阅消息
+   - 模板：报告生成通知
+   - 发送时机：每日限报倒计时提醒
+2. **历史记录**：个人档案页展示历史对话和报告，支持重新查看
+3. **每日提醒**：通过云函数定时触发，给活跃用户推送提醒消息
+4. **院校数据持续更新**：定期更新录取分数线数据
 
-### Task 2-5: 个人档案页面
+### Task 4-4: 数据看板
 
 **涉及文件**：
-- 修改：`src/pages/profile/index.vue`
+- 修改：`src/pages/profile/index.vue`（管理员模式）
+- 新增 CloudBase 统计数据
 
 **步骤**：
-1. 展示用户头像 + 昵称 + 剩余次数
-2. 历史对话列表（从 `sessions` 查询本用户，按时间倒序）
-3. 历史报告列表（从 `reports` 查询）
-4. 预填档案表单（省份/分数/选科），填写后自动预置到下次对话槽位
-5. 验收：历史对话可点击进入查看，档案信息可保存
+1. 在 CloudBase 创建统计集合 `ad_stats`
+2. 云函数每日聚合：`总用户数、日活、对话数、广告曝光数、广告收益预估`
+3. 个人档案页增加「运营数据」入口（仅管理员 openid 可见）
+4. 数据看板内容：
+   - 📊 今日活跃用户
+   - 💬 今日对话次数
+   - 🎬 广告曝光量
+   - 💰 预估收益
 
-### Task 2-6: 微信分享
+### Task 4-5: 合规与审核准备
 
-**步骤**：
-1. 配置 `onShareAppMessage`：分享标题 + 封面图
-2. 报告页面：「分享给朋友」按钮，生成报告预览图（canvas 截图）
-3. 验收：可分享小程序卡片，朋友点击进入正确落地页
+**个人小程序审核注意事项**：
+1. **教育类目**：个人小程序可选择「教育」类目，无需特殊资质（非培训/直播类）
+2. **广告合规**：
+   - 广告位不能遮挡核心功能按钮
+   - 不能诱导点击广告（如使用「关闭」伪装按钮）
+   - 激励视频需明确告知「观看完整视频可获得奖励」
+3. **AI 内容合规**：
+   - 需在用户协议中说明回复由 AI 生成，仅供参考
+   - 对话内容不宜出现绝对化用语（"一定能上""100%录取"）
+4. **隐私协议**：需在首次打开时展示隐私政策弹窗
 
 ---
 
-## 第三阶段 — 付费闭环（约1.5周）
-
-**目标**：Freemium 完整可用，用户可付费解锁报告，商业闭环跑通
-
-### Task 3-1: Credits 计数系统
-
-**涉及文件**：
-- 修改：`src/utils/auth.js`
-- 修改：`cloudfunctions/wx-login/index.js`
-
-**规则**：
-- 免费用户：`credits = 3`（每日重置）
-- 每次完整对话消耗 1 credit
-- credits = 0 时，发送消息弹出付费引导
-
-**步骤**：
-1. `users.credits` 字段，每日凌晨 CloudBase 定时触发器重置（免费用户置3）
-2. 前端在发送消息前检查 credits，不足时拦截并弹窗
-3. 对话完成时（生成报告节点）扣减 credits
-4. 验收：测试 credits = 0 时弹出付费弹窗
-
-### Task 3-2: 微信支付接入
-
-**涉及文件**：
-- 创建：`cloudfunctions/pay-create/index.js`（创建订单）
-- 创建：`cloudfunctions/pay-notify/index.js`（支付回调）
-- 创建：`src/utils/pay.js`
-
-**流程**：
-```
-用户点击付费 → 调用 pay-create 云函数
-             → 云函数调用微信统一下单 API → 返回 prepay_id
-             → 前端 wx.requestPayment(prepay_id)
-             → 用户完成支付
-             → 微信回调 pay-notify 云函数
-             → 更新 orders + reports.isPaid + users.plan
-```
-
-**套餐**：
-- 单次报告解锁：¥19.9
-- 月度会员（无限次）：¥49.9
-
-**步骤**：
-1. 申请微信商户号（mchid），配置支付密钥
-2. 编写 `pay-create` 云函数（统一下单）
-3. 编写 `pay-notify` 云函数（支付回调验签 + 业务逻辑）
-4. 前端支付弹窗 UI + `wx.requestPayment` 调用
-5. 验收：沙箱环境完整走通支付流程，报告成功解锁
-
-### Task 3-3: 付费解锁 UI
-
-**涉及文件**：
-- 修改：`src/pages/report/index.vue`
-- 创建：`src/components/PayModal/index.vue`
-
-**步骤**：
-1. 付费墙区域：模糊遮罩 + 「解锁完整报告 ¥19.9」按钮
-2. `PayModal` 组件：展示套餐选择（单次/月度）+ 支付按钮
-3. 支付成功后：动画解锁，展示完整报告
-4. 月度会员标识：档案页显示「会员」标签
-5. 验收：支付后报告全部展示，遮罩消失
-
-### Task 3-4: PDF/分享图生成
-
-**涉及文件**：
-- 修改：`cloudfunctions/report-generate/index.js`
-- 修改：`src/pages/report/index.vue`
-
-**步骤**：
-1. 云函数端：安装 `puppeteer-core` 或使用 CloudBase 截图能力，生成报告 PDF
-2. PDF 上传到 CloudBase 云存储，返回临时 URL
-3. 前端：「下载报告」按钮 → `wx.downloadFile` + `wx.openDocument`
-4. 分享图：前端 canvas 绘制报告首页截图，「保存到相册」
-5. 验收：可下载 PDF，可保存分享图
-
----
-
-## 第四阶段 — B端顾问工作台（约2周）
-
-**目标**：顾问登录、查看学生档案、可介入对话，To B 功能完整
-
-### Task 4-1: 顾问账号体系
-
-**涉及文件**：
-- 修改：CloudBase `users` 集合，增加 `role` 字段（user/advisor/admin）
-- 创建：`cloudfunctions/advisor-auth/index.js`
-- 修改：`src/pages/profile/index.vue`
-
-**步骤**：
-1. `users.role = 'advisor'` 由管理员手动设置（初期）
-2. `advisor-auth` 云函数：验证当前 openid 是否为顾问
-3. 前端：登录后判断 role，是顾问则显示「进入工作台」入口
-4. 顾问专属路由：`/pages/advisor/index`
-
-### Task 4-2: 学生档案工作台
-
-**涉及文件**：
-- 创建：`src/pages/advisor/index.vue`（学生列表）
-- 创建：`src/pages/advisor/student-detail.vue`（学生详情）
-
-**步骤**：
-1. 学生列表：查询 `sessions` 集合（顾问权限读所有），展示姓名/分数/省份/最后对话时间
-2. 点击进入学生详情：
-   - 基本信息（槽位数据）
-   - 对话历史回放（只读查看）
-   - 已生成的报告
-3. 搜索和筛选：按省份/分数段筛选
-4. 验收：顾问账号可看到所有学生列表
-
-### Task 4-3: 对话旁听与接管
-
-**涉及文件**：
-- 修改：`src/pages/advisor/student-detail.vue`
-- 修改：`cloudfunctions/report-generate/index.js`（增加人工批注字段）
-
-**旁听逻辑**（基于 CloudBase 实时监听）：
-```javascript
-// CloudBase 支持实时数据库监听
-const listener = db.collection('sessions')
-  .doc(sessionId)
-  .watch({
-    onChange: (snapshot) => {
-      // 收到学生最新对话，实时显示
-    }
-  })
-```
-
-**接管逻辑**：
-1. 顾问点击「接管对话」→ 更新 `sessions.status = 'advisor_takeover'`
-2. 学生端检测到 status 变化 → AI 暂停 → 显示「正在连接顾问...」
-3. 顾问输入内容 → 存入 `sessions.messages`（标注 `role: 'advisor'`）→ 学生端收到实时推送
-4. 结束接管：恢复 `status = 'active'`
-5. 验收：模拟双端，顾问接管后学生端收到顾问消息
-
-### Task 4-4: 顾问批注功能
-
-**步骤**：
-1. 在报告详情页，顾问可以给每个志愿添加文字批注
-2. 批注存储在 `reports.advisorNotes` 数组
-3. 学生端：如果有顾问批注，报告上显示「顾问建议」标签
-4. 验收：顾问添加批注后，学生端可见
-
-### Task 4-5: 数据运营后台
-
-**方案**：使用 CloudBase 自带的「数据库可视化」即可满足初期需求，无需自建后台
-
-**需要额外开发的**：
-1. 知识库更新：将 `knowledge_base.md` 内容拆分存入 `knowledge` 集合，支持在线查看
-2. 数据看板（简单版）：统计总用户数、付费用户数、今日对话数
-3. 可在 `advisor` 页面增加一个管理员专属的统计卡片
-
----
-
-## 技术风险与应对
-
-| 风险 | 概率 | 应对 |
-|------|------|------|
-| CloudBase 云函数冷启动慢（1-3s） | 高 | 设置「固定实例」，或改成 HTTP 触发器预热 |
-| LLM 响应无流式体验 | 中 | 伪流式（逐字渲染）+ 云函数流式输出（CloudBase 支持 HTTP 触发器 SSE） |
-| 知识库太大导致 JS bundle 过大 | 中 | 知识库改存 CloudBase，按需查询 |
-| 微信支付审核周期长 | 中 | 先用「微信收款码」过渡，支付后人工解锁 |
-| 小程序审核被拒（AI+教育+付费） | 低 | 提前准备资质文件（ICP + 教育类目） |
-
----
-
-## 开发环境准备
-
-```bash
-# 必需工具
-- HBuilderX (Uniapp 官方 IDE) 或 VSCode + uni-app 插件
-- 微信开发者工具
-- Node.js 18+
-
-# 账号准备
-- 微信小程序开发者账号（个人/企业）
-- 微信云开发环境 ID
-- DeepSeek API Key（或通义千问等）
-- 微信商户号（第三阶段才需要）
-```
-
----
-
-## 里程碑验收标准
+## 里程碑验收标准（更新版）
 
 | 阶段 | 完成标志 |
 |------|---------|
-| 地基 | 微信登录成功，可和 Agent 对话，LLM 返回正常 |
-| MVP | 真实用户内测可用，完整对话→报告流程跑通 |
-| 付费闭环 | 支付成功解锁报告，credits 正常扣减，PDF 可下载 |
-| B端完整 | 顾问可旁听/接管，批注可见，商业化就绪 |
+| 地基 ✅ | 微信登录成功，可和 Agent 对话，LLM 返回正常 |
+| MVP ✅ | 真实用户内测可用，完整对话→报告流程跑通 |
+| **广告变现** | 激励视频可解锁报告，Banner 展示，Credits 系统运营 |
+| **增长运营** | 分享裂变跑通，广告收益可查看，用户留存提升 |
 
 ---
 
-*此计划由 writing-plans skill 生成，2026-06-10*
+## 技术风险与应对（更新版）
+
+| 风险 | 概率 | 应对 |
+|------|------|------|
+| UV 未达 1000 无法开通流量主 | 高 | 先用模拟广告位占位，激励视频用 mock 模式过渡 |
+| 广告 eCPM 低（教育类用户高价值，通常较好） | 中 | 优化广告位位置，引导激励视频（eCPM 最高） |
+| CloudBase 云函数冷启动慢（1-3s） | 高 | 设置「固定实例」，或改成 HTTP 触发器预热 |
+| LLM 响应慢 | 中 | 伪流式（逐字渲染）+ loading 动画 |
+| 小程序审核被拒（AI+教育） | 低 | 准备用户协议 + 免责声明，避免绝对化用语 |
+| 分享裂变被判定为诱导分享 | 低 | 仅奖励 credits，不强制分享才能使用 |
+
+---
+
+*此计划于 2026-06-11 更新，第三/四阶段由付费模式改为广告变现模式*
