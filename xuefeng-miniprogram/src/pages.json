@@ -47,6 +47,18 @@
       "style": {
         "navigationBarTitleText": "预填档案"
       }
+    },
+    {
+      "path": "pages/admin/dashboard",
+      "style": {
+        "navigationBarTitleText": "运营数据"
+      }
+    },
+    {
+      "path": "pages/agreement/index",
+      "style": {
+        "navigationBarTitleText": "用户协议与隐私政策"
+      }
     }
   ],
   "globalStyle": {

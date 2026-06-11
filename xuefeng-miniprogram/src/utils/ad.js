@@ -2,6 +2,7 @@
  * 广告工具函数
  * - 激励视频广告（报告解锁）
  * - 插屏广告（页面切换）
+ * - 预加载 + 每日频次控制
  * - Mock 模式：UV < 1000 时模拟广告行为
  */
 
@@ -12,17 +13,73 @@ const INTERSTITIAL_UNIT_ID = 'adunit-xxxxx'
 // 是否使用模拟模式（UV < 1000 或开发阶段）
 const IS_MOCK = true
 
+// 每日激励视频上限
+const DAILY_REWARD_LIMIT = 5
+
+// 预加载的广告实例
+let preloadedRewardAd = null
+
+/**
+ * 预加载激励视频广告（App onLaunch 调用）
+ */
+export function preloadRewardVideo() {
+  if (IS_MOCK) return
+
+  try {
+    preloadedRewardAd = wx.createRewardedVideoAd({ adUnitId: REWARD_VIDEO_UNIT_ID })
+    preloadedRewardAd.load()
+    preloadedRewardAd.onLoad(() => console.log('激励视频预加载成功'))
+    preloadedRewardAd.onError((err) => console.error('激励视频预加载错误:', err))
+  } catch (e) {
+    console.error('预加载激励视频失败:', e)
+  }
+}
+
+/**
+ * 获取今日已观看激励视频次数
+ * @returns {number}
+ */
+function getTodayRewardCount() {
+  const today = new Date().toISOString().slice(0, 10)
+  const record = uni.getStorageSync('reward_count_date')
+  if (record === today) {
+    return uni.getStorageSync('reward_count') || 0
+  }
+  // 新的一天，重置计数
+  uni.setStorageSync('reward_count_date', today)
+  uni.setStorageSync('reward_count', 0)
+  return 0
+}
+
+/**
+ * 增加今日激励视频观看次数
+ */
+function incrementRewardCount() {
+  const count = getTodayRewardCount() + 1
+  uni.setStorageSync('reward_count', count)
+  return count
+}
+
 /**
  * 展示激励视频广告
  * @returns {Promise<boolean>} true=完整观看，false=未完整观看
  */
 export function showRewardVideo() {
+  // 每日上限检查
+  if (getTodayRewardCount() >= DAILY_REWARD_LIMIT) {
+    uni.showToast({ title: '今日观看次数已达上限', icon: 'none' })
+    return Promise.resolve(false)
+  }
+
   if (IS_MOCK) {
     return new Promise((resolve) => {
       uni.showModal({
         title: '模拟广告',
         content: '观看广告后解锁完整报告（模拟模式，点击确定即解锁）',
         success: (res) => {
+          if (res.confirm) {
+            incrementRewardCount()
+          }
           resolve(res.confirm)
         }
       })
@@ -30,7 +87,7 @@ export function showRewardVideo() {
   }
 
   return new Promise((resolve, reject) => {
-    const ad = wx.createRewardedVideoAd({ adUnitId: REWARD_VIDEO_UNIT_ID })
+    const ad = preloadedRewardAd || wx.createRewardedVideoAd({ adUnitId: REWARD_VIDEO_UNIT_ID })
 
     ad.onLoad(() => {
       console.log('激励视频加载成功')
@@ -38,21 +95,26 @@ export function showRewardVideo() {
 
     ad.onError((err) => {
       console.error('激励视频错误:', err)
+      preloadedRewardAd = null
       reject(err)
     })
 
     ad.onClose((res) => {
       if (res && res.isEnded) {
-        resolve(true) // 完整观看
+        incrementRewardCount()
+        resolve(true)
       } else {
-        resolve(false) // 未完整观看
+        resolve(false)
       }
     })
 
     ad.show().catch(() => {
-      // 加载失败时重新加载再展示
       ad.load().then(() => ad.show()).catch(reject)
     })
+
+    // 展示后预加载下一个
+    preloadedRewardAd = null
+    setTimeout(() => preloadRewardVideo(), 1000)
   })
 }
 
@@ -108,4 +170,11 @@ export function getRewardVideoUnitId() {
  */
 export function isMockMode() {
   return IS_MOCK
+}
+
+/**
+ * 获取今日剩余观看次数
+ */
+export function getRemainingRewardCount() {
+  return Math.max(0, DAILY_REWARD_LIMIT - getTodayRewardCount())
 }

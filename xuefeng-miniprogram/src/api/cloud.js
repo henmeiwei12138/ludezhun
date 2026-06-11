@@ -1,6 +1,7 @@
 /**
  * CloudBase 数据操作封装
  */
+import { getStoredOpenid } from '@/utils/auth'
 
 // 初始化云开发
 export function initCloud() {
@@ -148,4 +149,49 @@ export function getUserReports(userId) {
     .where({ userId })
     .orderBy('createdAt', 'desc')
     .get()
+}
+
+/**
+ * 邀请奖励：双方各获得 1 张免广告券
+ * @param {string} inviterOpenid - 邀请者 openid
+ * @param {string} inviteeOpenid - 被邀请者 openid
+ * @returns {Promise}
+ */
+export function inviteReward(inviterOpenid, inviteeOpenid) {
+  return callCloudFunction('invite-reward', {
+    inviterOpenid,
+    inviteeOpenid
+  })
+}
+
+/**
+ * 消耗 1 张免广告券
+ * @param {string} openid
+ * @returns {Promise}
+ */
+export function useFreeUnlock(openid) {
+  return db.collection('users')
+    .where({ openid, freeUnlocks: _.gt(0) })
+    .update({
+      data: {
+        freeUnlocks: _.inc(-1)
+      }
+    })
+}
+
+/**
+ * 记录广告统计数据
+ * @param {string} type - 广告类型: reward_video / banner / interstitial
+ * @param {string} action - 动作: show / click / complete
+ * @returns {Promise}
+ */
+export function logAdEvent(type, action) {
+  return db.collection('ad_events').add({
+    data: {
+      type,
+      action,
+      openid: getStoredOpenid() || '',
+      createdAt: db.serverDate()
+    }
+  })
 }

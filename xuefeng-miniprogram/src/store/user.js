@@ -14,7 +14,9 @@ export const userState = reactive({
   avatarUrl: '',
   role: 'user',
   isLoggedIn: !!getStoredOpenid(),
-  archive: null
+  archive: null,
+  freeUnlocks: 0,
+  inviteCount: 0
 })
 
 /**
@@ -30,6 +32,8 @@ export async function initUser() {
       userState.avatarUrl = userInfo.avatarUrl || ''
       userState.role = userInfo.role || 'user'
       userState.archive = userInfo.archive || null
+      userState.freeUnlocks = userInfo.freeUnlocks || 0
+      userState.inviteCount = userInfo.inviteCount || 0
     }
   } catch (err) {
     console.error('初始化用户信息失败:', err)

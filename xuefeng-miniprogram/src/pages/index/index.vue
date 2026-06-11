@@ -41,11 +41,31 @@
 
     <!-- Banner 广告 -->
     <AdBanner />
+
+    <!-- 隐私政策弹窗 -->
+    <view v-if="showPrivacyPopup" class="privacy-modal">
+      <view class="privacy-mask"></view>
+      <view class="privacy-content">
+        <text class="privacy-title">隐私政策提示</text>
+        <text class="privacy-text">欢迎使用雪峰志愿！我们非常重视您的隐私保护。在使用前，请您阅读并了解我们的《隐私政策》和《用户协议》。</text>
+        <view class="privacy-link" @tap="goToAgreement">
+          <text>查看隐私政策和用户协议</text>
+        </view>
+        <view class="privacy-actions">
+          <view class="privacy-btn disagree" @tap="onPrivacyDisagree">
+            <text>不同意</text>
+          </view>
+          <view class="privacy-btn agree" @tap="onPrivacyAgree">
+            <text>同意并继续</text>
+          </view>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { onShareAppMessage } from '@dcloudio/uni-app'
 import { userState, login, initUser } from '@/store/user'
 import { initCloud } from '@/api/cloud'
@@ -53,17 +73,62 @@ import AdBanner from '@/components/AdBanner/index.vue'
 
 onShareAppMessage(() => {
   return {
-    title: '雪峰志愿 - AI 高考志愿顾问',
-    path: '/pages/index/index'
+    title: '我在用雪峰志愿选志愿，你也来试试',
+    path: `/pages/index/index?inviter=${userState.openid}`
   }
 })
+
+const showPrivacyPopup = ref(false)
 
 onMounted(() => {
   initCloud()
   if (userState.isLoggedIn) {
     initUser()
   }
+  // 处理邀请参数
+  handleInviteParam()
+  // 检查隐私政策是否已同意
+  checkPrivacyAgreement()
 })
+
+/**
+ * 检查隐私政策是否已同意
+ */
+const checkPrivacyAgreement = () => {
+  const agreed = uni.getStorageSync('privacy_agreed')
+  if (!agreed) {
+    showPrivacyPopup.value = true
+  }
+}
+
+const onPrivacyAgree = () => {
+  uni.setStorageSync('privacy_agreed', true)
+  showPrivacyPopup.value = false
+}
+
+const onPrivacyDisagree = () => {
+  uni.showModal({
+    title: '提示',
+    content: '您需要同意隐私政策才能使用本小程序',
+    showCancel: false
+  })
+}
+
+const goToAgreement = () => {
+  uni.navigateTo({ url: '/pages/agreement/index' })
+}
+
+/**
+ * 处理分享邀请参数
+ */
+const handleInviteParam = () => {
+  const pages = getCurrentPages()
+  const page = pages[pages.length - 1] as any
+  const inviter = page?.options?.inviter
+  if (inviter && inviter !== userState.openid) {
+    uni.setStorageSync('inviter_openid', inviter)
+  }
+}
 
 const handleLogin = async () => {
   try {
@@ -178,5 +243,93 @@ const goToProfile = () => {
 .feature-card .desc {
   font-size: 24rpx;
   color: #999;
+}
+
+/* 隐私政策弹窗 */
+.privacy-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+}
+
+.privacy-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.privacy-content {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 48rpx 36rpx;
+}
+
+.privacy-title {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #333;
+  display: block;
+  text-align: center;
+  margin-bottom: 24rpx;
+}
+
+.privacy-text {
+  font-size: 28rpx;
+  color: #666;
+  line-height: 1.6;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+.privacy-link {
+  margin-bottom: 32rpx;
+}
+
+.privacy-link text {
+  font-size: 28rpx;
+  color: #667eea;
+  text-decoration: underline;
+}
+
+.privacy-actions {
+  display: flex;
+  gap: 20rpx;
+}
+
+.privacy-btn {
+  flex: 1;
+  padding: 24rpx 0;
+  border-radius: 48rpx;
+  text-align: center;
+}
+
+.privacy-btn.disagree {
+  background: #f5f5f5;
+}
+
+.privacy-btn.disagree text {
+  color: #999;
+  font-size: 30rpx;
+}
+
+.privacy-btn.agree {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.privacy-btn.agree text {
+  color: #fff;
+  font-size: 30rpx;
+  font-weight: bold;
 }
 </style>

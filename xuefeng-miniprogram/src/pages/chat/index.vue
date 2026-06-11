@@ -35,6 +35,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick } from 'vue'
+import { onShareAppMessage } from '@dcloudio/uni-app'
 import ChatBubble from '@/components/ChatBubble/index.vue'
 import SlotProgress from '@/components/SlotProgress/index.vue'
 import { XuefengAgent } from '@/agent/XuefengAgent'
@@ -43,6 +44,13 @@ import { userState } from '@/store/user'
 import { createSession, updateSession } from '@/api/cloud'
 import { showInterstitialOncePerDay } from '@/utils/ad'
 import AdBanner from '@/components/AdBanner/index.vue'
+
+onShareAppMessage(() => {
+  return {
+    title: '我在用雪峰志愿选志愿，你也来试试',
+    path: `/pages/index/index?inviter=${userState.openid}`
+  }
+})
 
 const agent = ref<XuefengAgent | null>(null)
 const messages = ref<Array<{ role: string, content: string }>>([])

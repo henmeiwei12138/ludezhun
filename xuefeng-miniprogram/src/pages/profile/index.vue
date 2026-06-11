@@ -5,6 +5,7 @@
         <image class="avatar" :src="userState.avatarUrl || '/static/logo.png'" mode="aspectFill" />
         <view class="info">
           <text class="nickname">{{ userState.nickname || '用户' }}</text>
+          <text class="invite-stats">已邀请 {{ userState.inviteCount }} 人 · 剩余 {{ userState.freeUnlocks }} 张免广告券</text>
         </view>
       </view>
       <view class="login-btn" v-else @tap="handleLogin">
@@ -34,6 +35,12 @@
       <view v-if="isAdvisor()" class="menu-item" @tap="goToAdvisor">
         <text class="menu-icon">👨‍💼</text>
         <text class="menu-title">顾问工作台</text>
+        <text class="menu-arrow">></text>
+      </view>
+
+      <view v-if="userState.role === 'admin'" class="menu-item" @tap="goTo('/pages/admin/dashboard')">
+        <text class="menu-icon">📊</text>
+        <text class="menu-title">运营数据</text>
         <text class="menu-arrow">></text>
       </view>
     </view>
@@ -105,6 +112,13 @@ const goToAdvisor = () => {
   font-size: 36rpx;
   color: #fff;
   font-weight: bold;
+  display: block;
+}
+
+.invite-stats {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 8rpx;
   display: block;
 }
 

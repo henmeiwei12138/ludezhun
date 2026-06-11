@@ -72,6 +72,12 @@
         </view>
       </view>
 
+      <!-- AI 免责声明 -->
+      <view class="disclaimer">
+        <text>⚠️ 本报告由 AI 生成，仅供参考，请结合实际情况综合判断。</text>
+        <text class="disclaimer-link" @tap="goToAgreement">查看用户协议</text>
+      </view>
+
       <!-- Banner 广告 -->
       <AdBanner />
     </view>
@@ -88,13 +94,14 @@ import { slotsState } from '@/store/slots'
 import { userState } from '@/store/user'
 import { callCloudFunction, getUserReports } from '@/api/cloud'
 import { showRewardVideo } from '@/utils/ad'
+import { useFreeUnlock, inviteReward } from '@/api/cloud'
 import AdRewardModal from '@/components/AdRewardModal/index.vue'
 import AdBanner from '@/components/AdBanner/index.vue'
 
 onShareAppMessage(() => {
   return {
-    title: '雪峰志愿 - AI 高考志愿顾问',
-    path: '/pages/index/index'
+    title: '我在用雪峰志愿选志愿，你也来试试',
+    path: `/pages/index/index?inviter=${userState.openid}`
   }
 })
 
@@ -150,6 +157,8 @@ const generateReport = async () => {
     })
     report.value = result
     uni.showToast({ title: '报告生成成功', icon: 'success' })
+    // 首次生成报告时结算邀请奖励
+    settleInviteReward()
     // 生成后显示解锁浮层
     showRewardModal.value = true
   } catch (err: any) {
@@ -161,6 +170,21 @@ const generateReport = async () => {
 }
 
 const onUnlock = async () => {
+  // 优先使用免广告券
+  if (userState.freeUnlocks > 0) {
+    try {
+      await useFreeUnlock(userState.openid)
+      userState.freeUnlocks -= 1
+      isUnlocked.value = true
+      showRewardModal.value = false
+      uni.showToast({ title: '已使用免广告券解锁', icon: 'success' })
+      return
+    } catch (err) {
+      console.error('使用免广告券失败:', err)
+    }
+  }
+
+  // 无券时播放激励视频
   try {
     const watched = await showRewardVideo()
     if (watched) {
@@ -180,8 +204,29 @@ const onSkip = () => {
   showRewardModal.value = false
 }
 
+/**
+ * 结算邀请奖励：被邀请者首次生成报告时，双方各获 1 张免广告券
+ */
+const settleInviteReward = async () => {
+  const inviterOpenid = uni.getStorageSync('inviter_openid')
+  if (!inviterOpenid || inviterOpenid === userState.openid) return
+
+  try {
+    await inviteReward(inviterOpenid, userState.openid)
+    uni.removeStorageSync('inviter_openid')
+    userState.freeUnlocks += 1
+    uni.showToast({ title: '邀请奖励已发放，获得 1 张免广告券', icon: 'none' })
+  } catch (err) {
+    console.error('邀请奖励结算失败:', err)
+  }
+}
+
 const shareReport = () => {
   // 由页面的 onShareAppMessage 处理
+}
+
+const goToAgreement = () => {
+  uni.navigateTo({ url: '/pages/agreement/index' })
 }
 
 // 暴露给页面的 generateReport 按钮
@@ -348,5 +393,28 @@ defineExpose({ generateReport })
 .share-btn text {
   color: #667eea;
   font-size: 30rpx;
+}
+
+.disclaimer {
+  margin-top: 24rpx;
+  padding: 20rpx 24rpx;
+  background: #fff8e1;
+  border-radius: 12rpx;
+  text-align: center;
+}
+
+.disclaimer text {
+  font-size: 24rpx;
+  color: #e65100;
+  display: block;
+}
+
+.disclaimer-link {
+  margin-top: 8rpx;
+}
+
+.disclaimer-link text {
+  color: #667eea;
+  text-decoration: underline;
 }
 </style>
