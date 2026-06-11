@@ -10,7 +10,7 @@
     </view>
 
     <view v-if="activeTab === 'privacy'" class="content">
-      <text class="title">雪峰志愿 隐私政策</text>
+      <text class="title">志愿助手 隐私政策</text>
       <text class="update-date">更新日期：2026年6月11日</text>
 
       <text class="section-title">一、信息收集</text>
@@ -36,11 +36,11 @@
     </view>
 
     <view v-if="activeTab === 'user'" class="content">
-      <text class="title">雪峰志愿 用户协议</text>
+      <text class="title">志愿助手 用户协议</text>
       <text class="update-date">更新日期：2026年6月11日</text>
 
       <text class="section-title">一、服务说明</text>
-      <text class="paragraph">雪峰志愿是一款基于人工智能技术的高考志愿辅助工具，为用户提供志愿填报参考建议。</text>
+      <text class="paragraph">志愿助手是一款基于人工智能技术的高考志愿辅助工具，为用户提供志愿填报参考建议。</text>
 
       <text class="section-title">二、免责声明</text>
       <text class="paragraph">1. 本小程序提供的所有信息和建议仅供参考，不构成任何形式的保证或承诺。</text>

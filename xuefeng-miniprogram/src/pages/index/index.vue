@@ -5,7 +5,7 @@
         <image class="avatar" :src="userState.avatarUrl || '/static/default-avatar.png'" mode="aspectFill" />
         <view class="info">
           <text class="nickname">{{ userState.nickname || '用户' }}</text>
-              <text class="credits">欢迎使用雪峰志愿</text>
+              <text class="credits">欢迎使用志愿助手</text>
         </view>
       </view>
       <view class="login-btn" v-else @tap="handleLogin">
@@ -47,7 +47,7 @@
       <view class="privacy-mask"></view>
       <view class="privacy-content">
         <text class="privacy-title">隐私政策提示</text>
-        <text class="privacy-text">欢迎使用雪峰志愿！我们非常重视您的隐私保护。在使用前，请您阅读并了解我们的《隐私政策》和《用户协议》。</text>
+        <text class="privacy-text">欢迎使用志愿助手！我们非常重视您的隐私保护。在使用前，请您阅读并了解我们的《隐私政策》和《用户协议》。</text>
         <view class="privacy-link" @tap="goToAgreement">
           <text>查看隐私政策和用户协议</text>
         </view>
@@ -72,7 +72,7 @@ import AdBanner from '@/components/AdBanner/index.vue'
 
 onShareAppMessage(() => {
   return {
-    title: '我在用雪峰志愿选志愿，你也来试试',
+    title: '我在用志愿助手选志愿，你也来试试',
     path: `/pages/index/index?inviter=${userState.openid}`
   }
 })

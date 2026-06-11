@@ -100,7 +100,7 @@ import AdBanner from '@/components/AdBanner/index.vue'
 
 onShareAppMessage(() => {
   return {
-    title: '我在用雪峰志愿选志愿，你也来试试',
+    title: '我在用志愿助手选志愿，你也来试试',
     path: `/pages/index/index?inviter=${userState.openid}`
   }
 })

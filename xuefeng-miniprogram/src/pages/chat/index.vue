@@ -47,7 +47,7 @@ import AdBanner from '@/components/AdBanner/index.vue'
 
 onShareAppMessage(() => {
   return {
-    title: '我在用雪峰志愿选志愿，你也来试试',
+    title: '我在用志愿助手选志愿，你也来试试',
     path: `/pages/index/index?inviter=${userState.openid}`
   }
 })
@@ -117,7 +117,7 @@ onMounted(async () => {
 
   messages.value.push({
     role: 'assistant',
-    content: '你好！我是雪峰志愿顾问。说说你的情况吧，哪个省的？考了多少分？想学什么方向？'
+    content: '你好！我是志愿助手顾问。说说你的情况吧，哪个省的？考了多少分？想学什么方向？'
   })
 })
 

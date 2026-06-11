@@ -3,7 +3,7 @@
     {
       "path": "pages/index/index",
       "style": {
-        "navigationBarTitleText": "雪峰志愿"
+        "navigationBarTitleText": "志愿助手"
       }
     },
     {
@@ -63,7 +63,7 @@
   ],
   "globalStyle": {
     "navigationBarTextStyle": "white",
-    "navigationBarTitleText": "雪峰志愿",
+    "navigationBarTitleText": "志愿助手",
     "navigationBarBackgroundColor": "#667eea",
     "backgroundColor": "#f5f5f5"
   },
