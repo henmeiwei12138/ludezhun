@@ -42,7 +42,7 @@ import { XuefengAgent } from '@/agent/XuefengAgent'
 import { slotsState, slotCount, canGenerateReport, syncSlotsFromAgent } from '@/store/slots'
 import { userState } from '@/store/user'
 import { createSession, updateSession } from '@/api/cloud'
-import { showInterstitialOncePerDay } from '@/utils/ad'
+import { showInterstitialOncePerDay, getInterstitialInstance } from '@/utils/ad'
 import AdBanner from '@/components/AdBanner/index.vue'
 
 onShareAppMessage(() => {
@@ -177,8 +177,7 @@ const sendQuickMessage = (msg: string) => {
 
 const goToReport = () => {
   // 生成报告后触发插屏广告（每天最多 1 次）
-  const app = getApp() as any
-  showInterstitialOncePerDay(app?.globalData?.interstitialAd)
+  showInterstitialOncePerDay(getInterstitialInstance())
   uni.navigateTo({ url: '/pages/report/index?generate=1' })
 }
 </script>

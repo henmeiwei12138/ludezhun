@@ -18,6 +18,8 @@ const DAILY_REWARD_LIMIT = 5
 
 // 预加载的广告实例
 let preloadedRewardAd = null
+// 插屏广告实例（模块级存储，避免 getApp() 问题）
+let interstitialAdInstance = null
 
 /**
  * 预加载激励视频广告（App onLaunch 调用）
@@ -140,6 +142,22 @@ export function createInterstitialAd() {
     console.error('创建插屏广告失败:', e)
     return null
   }
+}
+
+/**
+ * 存储插屏广告实例（App onLaunch 调用）
+ * @param {object} instance
+ */
+export function setInterstitialInstance(instance) {
+  interstitialAdInstance = instance
+}
+
+/**
+ * 获取插屏广告实例
+ * @returns {object|null}
+ */
+export function getInterstitialInstance() {
+  return interstitialAdInstance
 }
 
 /**
