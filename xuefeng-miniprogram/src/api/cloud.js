@@ -12,7 +12,7 @@ export function initCloud() {
     // env 参数说明：
     // env 参数决定接下来小程序发起的云开发调用
     // 此处请填入环境 ID, 环境 ID 可在云控制台获取
-    env: 'your-env-id',
+    env: 'cloudbase-d1g7i9ptr3660978a',
     traceUser: true
   })
 }

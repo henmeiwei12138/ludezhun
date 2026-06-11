@@ -5,7 +5,7 @@
         <image class="avatar" :src="userState.avatarUrl || '/static/default-avatar.png'" mode="aspectFill" />
         <view class="info">
           <text class="nickname">{{ userState.nickname || '用户' }}</text>
-          <text class="credits">剩余次数: {{ userState.credits }}</text>
+              <text class="credits">欢迎使用雪峰志愿</text>
         </view>
       </view>
       <view class="login-btn" v-else @tap="handleLogin">
@@ -38,6 +38,9 @@
         <text class="desc">管理你的信息</text>
       </view>
     </view>
+
+    <!-- Banner 广告 -->
+    <AdBanner />
   </view>
 </template>
 
@@ -46,6 +49,7 @@ import { onMounted } from 'vue'
 import { onShareAppMessage } from '@dcloudio/uni-app'
 import { userState, login, initUser } from '@/store/user'
 import { initCloud } from '@/api/cloud'
+import AdBanner from '@/components/AdBanner/index.vue'
 
 onShareAppMessage(() => {
   return {

@@ -22,6 +22,9 @@
         <text>暂无搜索结果</text>
       </view>
     </scroll-view>
+
+    <!-- Banner 广告 -->
+    <AdBanner />
   </view>
 </template>
 
@@ -29,6 +32,7 @@
 import { ref } from 'vue'
 import { db } from '@/api/cloud'
 import SchoolCard from '@/components/SchoolCard/index.vue'
+import AdBanner from '@/components/AdBanner/index.vue'
 
 const searchText = ref('')
 const filter = ref('all')

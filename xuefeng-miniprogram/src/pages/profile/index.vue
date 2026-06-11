@@ -5,7 +5,6 @@
         <image class="avatar" :src="userState.avatarUrl || '/static/logo.png'" mode="aspectFill" />
         <view class="info">
           <text class="nickname">{{ userState.nickname || '用户' }}</text>
-          <text class="credits">剩余次数: {{ userState.credits }}</text>
         </view>
       </view>
       <view class="login-btn" v-else @tap="handleLogin">

@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { onLaunch, onShow, onHide } from "@dcloudio/uni-app";
+import { createInterstitialAd } from "@/utils/ad";
+
 onLaunch(() => {
   console.log("App Launch");
+  // 预加载插屏广告
+  const app = getApp() as any
+  if (!app.globalData) app.globalData = {}
+  app.globalData.interstitialAd = createInterstitialAd()
 });
 onShow(() => {
   console.log("App Show");

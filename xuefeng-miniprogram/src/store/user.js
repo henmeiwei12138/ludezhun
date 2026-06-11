@@ -12,8 +12,6 @@ export const userState = reactive({
   openid: getStoredOpenid() || '',
   nickname: '',
   avatarUrl: '',
-  credits: 3,
-  plan: 'free',
   role: 'user',
   isLoggedIn: !!getStoredOpenid(),
   archive: null
@@ -30,8 +28,6 @@ export async function initUser() {
     if (userInfo) {
       userState.nickname = userInfo.nickname || ''
       userState.avatarUrl = userInfo.avatarUrl || ''
-      userState.credits = userInfo.credits || 3
-      userState.plan = userInfo.plan || 'free'
       userState.role = userInfo.role || 'user'
       userState.archive = userInfo.archive || null
     }
@@ -69,31 +65,6 @@ export async function updateUserProfile(data) {
     console.error('更新用户资料失败:', err)
     throw err
   }
-}
-
-/**
- * 扣减次数
- */
-export function deductCredit() {
-  if (userState.credits > 0) {
-    userState.credits--
-    return true
-  }
-  return false
-}
-
-/**
- * 检查是否有剩余次数
- */
-export function hasCredits() {
-  return userState.credits > 0 || userState.plan === 'vip'
-}
-
-/**
- * 是否是会员
- */
-export function isVip() {
-  return userState.plan === 'vip'
 }
 
 /**

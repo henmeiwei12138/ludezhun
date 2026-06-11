@@ -8,8 +8,8 @@
       <text class="card-summary">{{ summary }}</text>
     </view>
     <view class="card-footer">
-      <text class="card-status" :class="report.isPaid ? 'paid' : 'free'">
-        {{ report.isPaid ? '已解锁' : '免费预览' }}
+      <text class="card-status" :class="report.isUnlocked ? 'paid' : 'free'">
+        {{ report.isUnlocked ? '已解锁' : '免费预览' }}
       </text>
     </view>
   </view>
@@ -25,7 +25,7 @@ const props = defineProps<{
     chong?: any[]
     wen?: any[]
     bao?: any[]
-    isPaid?: boolean
+    isUnlocked?: boolean
     createdAt?: any
   }
 }>()

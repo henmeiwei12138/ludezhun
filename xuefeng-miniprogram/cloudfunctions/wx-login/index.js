@@ -14,6 +14,8 @@ exports.main = async (event, context) => {
       openid: openid
     }).get()
 
+    const today = new Date().toISOString().slice(0, 10)
+
     if (userResult.data.length === 0) {
       // 新用户，创建记录
       await db.collection('users').add({
@@ -24,10 +26,24 @@ exports.main = async (event, context) => {
           credits: 3,
           plan: 'free',
           role: 'user',
+          lastRefreshDate: today,
           createdAt: db.serverDate(),
           updatedAt: db.serverDate()
         }
       })
+    } else {
+      // 老用户，检查每日刷新
+      const user = userResult.data[0]
+      const lastRefresh = user.lastRefreshDate || ''
+      if (lastRefresh < today) {
+        await db.collection('users').where({ openid }).update({
+          data: {
+            credits: 3,
+            lastRefreshDate: today,
+            updatedAt: db.serverDate()
+          }
+        })
+      }
     }
 
     return {

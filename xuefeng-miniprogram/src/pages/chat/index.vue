@@ -27,6 +27,9 @@
     <view v-if="canGenerateReport" class="generate-report-btn" @tap="goToReport">
       <text>资料收集完整，立即生成报告</text>
     </view>
+
+    <!-- Banner 广告 -->
+    <AdBanner />
   </view>
 </template>
 
@@ -38,6 +41,8 @@ import { XuefengAgent } from '@/agent/XuefengAgent'
 import { slotsState, slotCount, canGenerateReport, syncSlotsFromAgent } from '@/store/slots'
 import { userState } from '@/store/user'
 import { createSession, updateSession } from '@/api/cloud'
+import { showInterstitialOncePerDay } from '@/utils/ad'
+import AdBanner from '@/components/AdBanner/index.vue'
 
 const agent = ref<XuefengAgent | null>(null)
 const messages = ref<Array<{ role: string, content: string }>>([])
@@ -163,6 +168,9 @@ const sendQuickMessage = (msg: string) => {
 }
 
 const goToReport = () => {
+  // 生成报告后触发插屏广告（每天最多 1 次）
+  const app = getApp() as any
+  showInterstitialOncePerDay(app?.globalData?.interstitialAd)
   uni.navigateTo({ url: '/pages/report/index?generate=1' })
 }
 </script>

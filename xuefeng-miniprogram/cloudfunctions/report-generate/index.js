@@ -87,6 +87,19 @@ exports.main = async (event, context) => {
     return { code: -1, msg: '信息不完整，至少需要省份、分数、核心诉求' }
   }
 
+  const db = cloud.database()
+  const _ = db.command
+
+  // 检查用户次数
+  const userRes = await db.collection('users').where({ openid: userId }).get()
+  if (userRes.data.length === 0) {
+    return { code: -1, msg: '用户不存在' }
+  }
+  const user = userRes.data[0]
+  if (user.plan !== 'vip' && user.credits <= 0) {
+    return { code: -2, msg: '免费次数已用完' }
+  }
+
   try {
     // 构建报告请求
     const slotSummary = Object.entries(slots)

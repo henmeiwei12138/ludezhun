@@ -29,7 +29,7 @@
       <view class="section">
         <text class="section-title">冲一冲</text>
         <view v-for="(item, index) in report.chong" :key="'c'+index" class="school-card"
-          :class="{ blur: index >= 2 && !isPaid }">
+          :class="{ blur: index >= 2 && !isUnlocked }">
           <text class="school-name">{{ item.school }}</text>
           <text class="major">{{ item.major }}</text>
           <text class="reason">{{ item.reason }}</text>
@@ -37,7 +37,7 @@
         </view>
       </view>
 
-      <view class="section" :class="{ blur: !isPaid }">
+      <view class="section" :class="{ blur: !isUnlocked }">
         <text class="section-title">稳妥</text>
         <view v-for="(item, index) in report.wen" :key="'w'+index" class="school-card">
           <text class="school-name">{{ item.school }}</text>
@@ -46,7 +46,7 @@
         </view>
       </view>
 
-      <view class="section" :class="{ blur: !isPaid }">
+      <view class="section" :class="{ blur: !isUnlocked }">
         <text class="section-title">保底</text>
         <view v-for="(item, index) in report.bao" :key="'b'+index" class="school-card">
           <text class="school-name">{{ item.school }}</text>
@@ -55,7 +55,7 @@
         </view>
       </view>
 
-      <view v-if="report.analysis" class="section" :class="{ blur: !isPaid }">
+      <view v-if="report.analysis" class="section" :class="{ blur: !isUnlocked }">
         <text class="section-title">就业趋势分析</text>
         <text class="section-content">{{ report.analysis }}</text>
       </view>
@@ -65,25 +65,19 @@
         <text class="section-content warning-text">{{ report.warning }}</text>
       </view>
 
-      <!-- 付费墙 -->
-      <view v-if="!isPaid" class="pay-wall">
-        <view class="pay-mask"></view>
-        <view class="pay-content">
-          <text class="pay-title">解锁完整报告</text>
-          <text class="pay-desc">包含稳妥、保底志愿详细分析及就业趋势</text>
-          <view class="pay-btn" @tap="showPayModal">
-            <text>解锁 ¥19.9</text>
-          </view>
-        </view>
-      </view>
-
       <!-- 分享按钮 -->
       <view class="share-bar">
         <view class="share-btn" @tap="shareReport">
           <text>分享给朋友</text>
         </view>
       </view>
+
+      <!-- Banner 广告 -->
+      <AdBanner />
     </view>
+
+    <!-- 激励视频解锁浮层 -->
+    <AdRewardModal :visible="showRewardModal" @unlocked="onUnlock" @skip="onSkip" />
   </view>
 </template>
 
@@ -93,6 +87,9 @@ import { onShareAppMessage } from '@dcloudio/uni-app'
 import { slotsState } from '@/store/slots'
 import { userState } from '@/store/user'
 import { callCloudFunction, getUserReports } from '@/api/cloud'
+import { showRewardVideo } from '@/utils/ad'
+import AdRewardModal from '@/components/AdRewardModal/index.vue'
+import AdBanner from '@/components/AdBanner/index.vue'
 
 onShareAppMessage(() => {
   return {
@@ -102,8 +99,9 @@ onShareAppMessage(() => {
 })
 
 const report = ref<any>(null)
-const isPaid = ref(false)
+const isUnlocked = ref(false)
 const isGenerating = ref(false)
+const showRewardModal = ref(false)
 
 onMounted(async () => {
   const pages = getCurrentPages()
@@ -116,7 +114,7 @@ onMounted(async () => {
       const result = await getUserReports(userState.openid)
       if (result.data && result.data.length > 0) {
         report.value = result.data[0]
-        isPaid.value = result.data[0].isPaid || false
+        isUnlocked.value = result.data[0].isUnlocked || false
       }
     } catch (err) {
       console.error('获取报告失败:', err)
@@ -126,6 +124,11 @@ onMounted(async () => {
   // 从聊天页跳转过来，自动生成报告
   if (shouldGenerate && !report.value) {
     generateReport()
+  }
+
+  // 已有报告但未解锁时，显示解锁浮层
+  if (report.value && !isUnlocked.value) {
+    showRewardModal.value = true
   }
 })
 
@@ -147,6 +150,8 @@ const generateReport = async () => {
     })
     report.value = result
     uni.showToast({ title: '报告生成成功', icon: 'success' })
+    // 生成后显示解锁浮层
+    showRewardModal.value = true
   } catch (err: any) {
     console.error('生成报告失败:', err)
     uni.showToast({ title: err.msg || '生成失败，请重试', icon: 'none' })
@@ -155,18 +160,24 @@ const generateReport = async () => {
   }
 }
 
-const showPayModal = () => {
-  uni.showModal({
-    title: '解锁完整报告',
-    content: '支付 ¥19.9 解锁全部志愿推荐',
-    confirmText: '去支付',
-    success: (res) => {
-      if (res.confirm) {
-        // TODO: 接入微信支付
-        uni.showToast({ title: '支付功能开发中', icon: 'none' })
-      }
+const onUnlock = async () => {
+  try {
+    const watched = await showRewardVideo()
+    if (watched) {
+      isUnlocked.value = true
+      showRewardModal.value = false
+      uni.showToast({ title: '解锁成功', icon: 'success' })
+    } else {
+      uni.showToast({ title: '需完整观看广告才能解锁', icon: 'none' })
     }
-  })
+  } catch (err) {
+    console.error('广告播放失败:', err)
+    uni.showToast({ title: '广告加载失败，请稍后重试', icon: 'none' })
+  }
+}
+
+const onSkip = () => {
+  showRewardModal.value = false
 }
 
 const shareReport = () => {
@@ -319,57 +330,6 @@ defineExpose({ generateReport })
 .blur {
   filter: blur(5px);
   pointer-events: none;
-}
-
-.pay-wall {
-  position: relative;
-  margin-top: -100rpx;
-  padding-top: 100rpx;
-}
-
-.pay-mask {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 200rpx;
-  background: linear-gradient(transparent, #f5f5f5);
-}
-
-.pay-content {
-  position: relative;
-  background: #fff;
-  border-radius: 16rpx;
-  padding: 40rpx;
-  text-align: center;
-}
-
-.pay-title {
-  font-size: 36rpx;
-  font-weight: bold;
-  color: #333;
-  display: block;
-  margin-bottom: 12rpx;
-}
-
-.pay-desc {
-  font-size: 28rpx;
-  color: #666;
-  display: block;
-  margin-bottom: 32rpx;
-}
-
-.pay-btn {
-  display: inline-block;
-  padding: 20rpx 80rpx;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 40rpx;
-}
-
-.pay-btn text {
-  color: #fff;
-  font-size: 32rpx;
-  font-weight: bold;
 }
 
 .share-bar {
